@@ -1,0 +1,41 @@
+{
+	"name": "Locking API",
+
+	"namespace": "MCRI\\LockingAPI",
+
+	"authors": [
+		{
+			"name": "Luke Stevens",
+			"email": "luke.stevens@mcri.edu.au",
+			"institution": "Murdoch Children's Research Institute"
+		}
+	],
+
+	"description": "Lock, unlock and read the lock status of instruments using API calls.",
+        
+        "permissions": [
+                "read redcap_locking_data",
+                "write redcap_locking_data"
+	],
+
+	"enable-every-page-hooks-on-system-pages": false,
+
+	"no-auth-pages": [
+                "status",
+                "lock",
+                "unlock"
+        ],
+        
+        "links": {
+	},
+
+	"system-settings": [
+	],
+
+	"project-settings": [
+        ],
+        
+        "compatibility": {
+                "redcap-version-min": "8.2.3"
+        }
+}
