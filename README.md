@@ -58,7 +58,7 @@ If an instance value >=2 is submitted for a non-repeating event/instrument then 
     record=1001&event=event_1_arm_1&instrument=concomitant_medication
     ```
 
-* All forms in Event 1 for record 1001: 
+* All forms in Event 1 for record 1001 (note the instrument & instance parameters are empty): 
     ```http
     record=1001&event=event_1_arm_1 OR record=1001&event=event_1_arm_1&instrument=&instance=
     ```
