@@ -8,17 +8,16 @@ Luke Stevens, Murdoch Children's Research Institute https://www.mcri.edu.au
 
 Read lock status, lock and unlock data entry forms via API calls.
 
-Post api token and `record[,event][,instrument][,instance]` to your regular system 
-API endpoint, using the following query string: 
+Post api token and `record[,event][,instrument][,instance]` to your regular system API endpoint, using the following query string: 
 
 ```http
 ?NOAUTH&type=module&prefix=locking_api&page=<action page>
 ```
 
 `<action page>` must be one of:
-* **status**: Obtain current lock state of the record[,event][,instrument],[instance]
-* **lock**:   Lock the record[,event][,instrument],[instance]
-* **unlock**: Unlock the record[,event][,instrument],[instance]
+* **status**: Obtain current lock state of the `record[,event][,instrument],[instance]`
+* **lock**:   Lock the `record[,event][,instrument],[instance]`
+* **unlock**: Unlock the `record[,event][,instrument],[instance]`
 
 Note it is not possible to lock a form that has not yet had any data entry.
 
@@ -41,8 +40,7 @@ Return Format options are the usual csv, json or xml (default).
 
 Event will be ignored if the project is not longitudinal.
 
-If an instance value >=2 is submitted for a non-repeating event/instrument then
-an error will be returned.
+If an instance value >=2 is submitted for a non-repeating event/instrument then an error will be returned.
 
 ### Examples
 * Screening form in Event 1 for record 1001 (instance not required as not a repeating form):
@@ -82,17 +80,13 @@ an error will be returned.
 
 ## Returned Data
 
-All API calls (*i.e.*, status, lock, unlock) return a set of the event/instrument/
-instance combinations for the record/event/instrument/instance requested. For 
-each combination the lock status is returned as follows:
+All API calls (*i.e.*, status, lock, unlock) return a set of the event/instrument/instance combinations for the record/event/instrument/instance requested. For each combination the lock status is returned as follows:
+
 * **1**: Locked
 * **0**: Not locked (but form data exists)
 * **&lt;empty&gt;**: No data exists for form
 
-Note that this enables you to determine whether data has ever been entered for 
-an instrument, which is not possible using the regular 'Export Records' or 
-'Export Reports' API methods. ;-) (Also note it is not possible to lock forms 
-that have not yet had any data entry.)
+Note that this enables you to determine whether data has ever been entered for an instrument, which is not possible using the regular 'Export Records' or 'Export Reports' API methods. ;-) (Also note it is not possible to lock forms that have not yet had any data entry.)
 
 ### CSV Example
 
