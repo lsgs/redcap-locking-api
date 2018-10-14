@@ -15,9 +15,9 @@ Post api token and `record[,event][,instrument][,instance]` to your regular syst
 ```
 
 `<action page>` must be one of:
-* **status**: Obtain current lock state of the `record[,event][,instrument],[instance]`
-* **lock**:   Lock the `record[,event][,instrument],[instance]`
-* **unlock**: Unlock the `record[,event][,instrument],[instance]`
+* **status**: Obtain current lock state of the `record[,event][,instrument][,instance]`
+* **lock**:   Lock the `record[,event][,instrument][,instance]`
+* **unlock**: Unlock the `record[,event][,instrument][,instance]`
 
 Note it is not possible to lock a form that has not yet had any data entry.
 
