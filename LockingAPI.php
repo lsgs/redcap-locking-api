@@ -13,6 +13,7 @@ use Logging;
 use Project;
 use REDCap;
 use RestUtility;
+use Locking;
 
 /**
  * REDCap External Module: Locking API
@@ -44,6 +45,7 @@ class LockingAPI extends AbstractExternalModule
         private $instrument;
         private $instance;
         private $lock_status;
+        private $whole_record;
 
         public function __construct() {
                 parent::__construct();
@@ -91,6 +93,7 @@ class LockingAPI extends AbstractExternalModule
                 $this->event_id = $this->validateEvent();
                 $this->instrument = $this->validateInstrument();
                 $this->instance = $this->validateInstance();
+                $this->whole_record = $this->validateWholeRecord();
         }
         
         protected function validateReturnFormat() {
@@ -173,6 +176,12 @@ class LockingAPI extends AbstractExternalModule
                         }
                 }
                 return $instance;
+        }
+
+        protected function validateWholeRecord() {
+                $whole_record = false;
+                // TBD
+                return $whole_record;
         }
         
         public function readCurrentLockStatus() {
@@ -265,46 +274,54 @@ class LockingAPI extends AbstractExternalModule
         
         protected function updateLockStatus($lock=true) {
                 $this->processLockingApiRequest();
-                $this->readCurrentLockStatus();
-                
-                // update redcap_locking_data for submitted instruments
-                $toChange = array();
-                foreach ($this->lock_status as $eventId => $event) {
-                        foreach ($event['event_forms'] as $form_name => $form_data) {
-                                if (count($form_data['data']) > 0) {
-                                        // form has been saved (and is locked or not)
-                                        foreach ($form_data['data'] as $instance => $instanceData) {
-                                                $locked = (isset($instanceData['username']));
-                                                if (($lock && !$locked) || (!$lock && $locked)) { // lock unlocked forms or un lock locked forms 
-                                                        $toChange[] = array(
-                                                                'record'=>$this->record,
-                                                                'event_id'=>$eventId,
-                                                                'instrument'=>$form_name,
-                                                                'instance'=>$instance
-                                                        );
+
+                if($this->whole_record === true) {
+                        // TBD $this->handleWholeLock()
+                        return "Entire Record(s) have been locked.";
+                }
+                else {
+                        $this->readCurrentLockStatus();
+
+                        // update redcap_locking_data for submitted instruments
+                        $toChange = array();
+                        foreach ($this->lock_status as $eventId => $event) {
+                                foreach ($event['event_forms'] as $form_name => $form_data) {
+                                        if (count($form_data['data']) > 0) {
+                                                // form has been saved (and is locked or not)
+                                                foreach ($form_data['data'] as $instance => $instanceData) {
+                                                        $locked = (isset($instanceData['username']));
+                                                        if (($lock && !$locked) || (!$lock && $locked)) { // lock unlocked forms or un lock locked forms 
+                                                                $toChange[] = array(
+                                                                        'record'=>$this->record,
+                                                                        'event_id'=>$eventId,
+                                                                        'instrument'=>$form_name,
+                                                                        'instance'=>$instance
+                                                                );
+                                                        }
                                                 }
                                         }
                                 }
                         }
-                }
-                
-                foreach ($toChange as $thisChange) {
-                        if ($lock) {
-                                $result = $this->writeLock($thisChange['record'], $thisChange['event_id'], $thisChange['instrument'], $thisChange['instance']);
-                                if ($result !== false) {
-                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['username'] = $this->user;
-                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['timestamp'] = $result;
-                                }
-                        } else {
-                                $result = $this->writeUnlock($thisChange['record'], $thisChange['event_id'], $thisChange['instrument'], $thisChange['instance']);
-                                if ($result) {
-                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['username'] = '';
-                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['timestamp'] = '';
+                        
+                        foreach ($toChange as $thisChange) {
+                                if ($lock) {
+                                        $result = $this->writeLock($thisChange['record'], $thisChange['event_id'], $thisChange['instrument'], $thisChange['instance']);
+                                        if ($result !== false) {
+                                                $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['username'] = $this->user;
+                                                $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['timestamp'] = $result;
+                                        }
+                                } else {
+                                        $result = $this->writeUnlock($thisChange['record'], $thisChange['event_id'], $thisChange['instrument'], $thisChange['instance']);
+                                        if ($result) {
+                                                $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['username'] = '';
+                                                $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['timestamp'] = '';
+                                        }
                                 }
                         }
+
+                        return $this->formatReturnData();
                 }
-                
-                return $this->formatReturnData();
+                               
         }
 
         /** 
