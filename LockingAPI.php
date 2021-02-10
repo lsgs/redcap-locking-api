@@ -46,6 +46,7 @@ class LockingAPI extends AbstractExternalModule
         private $instance;
         private $lock_status;
         private $lock_record_level;
+        private $arm;
 
         public function __construct() {
                 parent::__construct();
@@ -94,6 +95,8 @@ class LockingAPI extends AbstractExternalModule
                 $this->instrument = $this->validateInstrument();
                 $this->instance = $this->validateInstance();
                 $this->lock_record_level = $this->validateLockRecordLevel();
+                $this->arm = $this->validateArm();
+
         }
         
         protected function validateReturnFormat() {
@@ -180,13 +183,27 @@ class LockingAPI extends AbstractExternalModule
 
         protected function validateLockRecordLevel() {
                 $lock_record_level = false;
-                if(isset($this->post['lock_record_level'])) {
+                if(isset($this->post['lock_record_level'])  && $this->post['lock_record_level']!=='' ) {
                         $lock_record_level = $this->post['lock_record_level'];
                 }
-                // TBD
+
                 return $lock_record_level;
         }
-        
+
+        public function validateArm() {
+                $arm = 1;
+                if( isset($this->post['arm']) && $this->post['arm']!=='' ) {
+                        // Check if arm exists
+                        if( isset($this->Proj->events[$this->post['arm']]['id']) ) {
+                                $arm = $this->post['arm'];                                
+                        }
+                        else {
+                                self::errorResponse("Invalid arm $arm"); 
+                        }
+                }
+                return $arm;
+        }
+      
         public function readCurrentLockStatus() {
                 if ($this->Proj->longitudinal) {
                         $events = REDCap::getEventNames(true, false);
@@ -262,12 +279,12 @@ class LockingAPI extends AbstractExternalModule
         }
 
         public function handleLockRecordLevel(bool $lock) {
-                $isWholeRecordLocked = \Locking::isWholeRecordLocked($this->project_id, $this->record, $this->arm_id);
+                $isWholeRecordLocked = \Locking::isWholeRecordLocked($this->project_id, $this->record, $this->arm);
                 if($lock == true && !$isWholeRecordLocked) {
-                        \Locking::lockWholeRecord($this->project_id, $this->record, $this->arm_id);
+                        \Locking::lockWholeRecord($this->project_id, $this->record, $this->arm);
                 } 
                 else if ($lock == false && $isWholeRecordLocked) {
-                        \Locking::unlockWholeRecord($this->project_id, $this->record, $this->arm_id);
+                        \Locking::unlockWholeRecord($this->project_id, $this->record, $this->arm);
                 }
         }
        
@@ -287,12 +304,10 @@ class LockingAPI extends AbstractExternalModule
         
         protected function updateLockStatus($lock=true) {
                 $this->processLockingApiRequest();
-
-                if($this->lock_record_level === true) {
-
+        
+                if($this->lock_record_level == true) {
                         $this->handleLockRecordLevel($lock);
-                        # public function lockWholeRecord($project_id, $record, $arm=1)
-                        return "Entire Record(s) have been locked.";
+                        return "Entire Record(s) have been unlocked/locked.";
                 }
                 else {
                         $this->readCurrentLockStatus();
