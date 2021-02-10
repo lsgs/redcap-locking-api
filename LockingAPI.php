@@ -47,7 +47,6 @@ class LockingAPI extends AbstractExternalModule
         private $lock_status;
         private $lock_record_level;
         private $arm;
-        private $test;
 
         public function __construct() {
                 parent::__construct();
@@ -316,9 +315,6 @@ class LockingAPI extends AbstractExternalModule
         
                 if($this->lock_record_level == true) {
                         $this->handleLockRecordLevel($lock);
-                        return $this->test;
-                        //$test = count(\Records::getRecordList( $this->project_id, array(), false, false, $this->arm, null, 0, $this->record ));
-
                         return "Entire Record(s) have been unlocked/locked.";
                 }
                 else {
