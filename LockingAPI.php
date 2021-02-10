@@ -47,6 +47,7 @@ class LockingAPI extends AbstractExternalModule
         private $lock_status;
         private $lock_record_level;
         private $arm;
+        private $test;
 
         public function __construct() {
                 parent::__construct();
@@ -191,11 +192,19 @@ class LockingAPI extends AbstractExternalModule
         }
 
         public function validateArm() {
-                $arm = 1;
                 if( isset($this->post['arm']) && $this->post['arm']!=='' ) {
-                        // Check if arm exists
-                        if( isset($this->Proj->events[$this->post['arm']]['id']) ) {
-                                $arm = $this->post['arm'];                                
+                        # Check if arm exists
+                        if( isset($this->Proj->events[$this->post['arm']]['id']) ) { 
+                                # Check if record exists within arm                                                              
+                                $recordInArm = $recordInArm = count(\Records::getRecordList( $this->project_id, array(), false, false, $this->post['arm'], null, 0, $this->record ));
+
+                                if( $recordInArm > 0 ) {
+                                        $arm = $this->post['arm'];
+                                }
+                                else {
+                                        $invalid_arm = $this->post['arm'];
+                                        self::errorResponse("Record with ID $this->record is not included in arm $invalid_arm");   
+                                }
                         }
                         else {
                                 self::errorResponse("Invalid arm $arm"); 
@@ -307,6 +316,9 @@ class LockingAPI extends AbstractExternalModule
         
                 if($this->lock_record_level == true) {
                         $this->handleLockRecordLevel($lock);
+                        return $this->test;
+                        //$test = count(\Records::getRecordList( $this->project_id, array(), false, false, $this->arm, null, 0, $this->record ));
+
                         return "Entire Record(s) have been unlocked/locked.";
                 }
                 else {
