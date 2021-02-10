@@ -46,7 +46,9 @@ class LockingAPI extends AbstractExternalModule
         private $instance;
         private $lock_status;
         private $lock_record_level;
+        private $lock_record_status;
         private $arm;
+        private $arm_id;
 
         public function __construct() {
                 parent::__construct();
@@ -191,9 +193,10 @@ class LockingAPI extends AbstractExternalModule
         }
 
         public function validateArm() {
+                $arm = 1;
                 if( isset($this->post['arm']) && $this->post['arm']!=='' ) {
                         # Check if arm exists
-                        if( isset($this->Proj->events[$this->post['arm']]['id']) ) { 
+                        if( isset($this->Proj->events[$this->post['arm']]['id']) ) {                                
                                 # Check if record exists within arm                                                              
                                 $recordInArm = $recordInArm = count(\Records::getRecordList( $this->project_id, array(), false, false, $this->post['arm'], null, 0, $this->record ));
 
@@ -209,9 +212,28 @@ class LockingAPI extends AbstractExternalModule
                                 self::errorResponse("Invalid arm $arm"); 
                         }
                 }
+                $this->arm_id = $this->Proj->events[$arm]['id'];
                 return $arm;
         }
-      
+        
+        public function readLockRecordLevelStatus() {
+                
+                $query = $this->query('
+                        SELECT * 
+                        FROM `redcap_locking_records`                         
+                        WHERE `record` = ?
+                        AND `project_id` = ? 
+                        AND `arm_id` = ?
+                ',
+                [
+                        $this->record,
+                        $this->project_id,
+                        $this->arm_id
+                ]);
+
+                $this->lock_record_status = $query->fetch_object();
+        }
+        
         public function readCurrentLockStatus() {
                 if ($this->Proj->longitudinal) {
                         $events = REDCap::getEventNames(true, false);
@@ -287,19 +309,27 @@ class LockingAPI extends AbstractExternalModule
         }
 
         public function handleLockRecordLevel(bool $lock) {
-                $isWholeRecordLocked = \Locking::isWholeRecordLocked($this->project_id, $this->record, $this->arm);
+                $isWholeRecordLocked = Locking::isWholeRecordLocked($this->project_id, $this->record, $this->arm);
                 if($lock == true && !$isWholeRecordLocked) {
-                        \Locking::lockWholeRecord($this->project_id, $this->record, $this->arm);
+                        Locking::lockWholeRecord($this->project_id, $this->record, $this->arm);
                 } 
                 else if ($lock == false && $isWholeRecordLocked) {
-                        \Locking::unlockWholeRecord($this->project_id, $this->record, $this->arm);
+                        Locking::unlockWholeRecord($this->project_id, $this->record, $this->arm);
                 }
         }
        
         public function readStatus() {
                 $this->processLockingApiRequest();
-                $this->readCurrentLockStatus();
-                return $this->formatReturnData();
+                if($this->lock_record_level == true) {
+                        
+                        $this->readLockRecordLevelStatus();
+                        return $this->returnLockRecordLevel();
+                }
+                else {
+                        $this->readCurrentLockStatus();
+                        return $this->formatReturnData();
+                }
+
         }
         
         public function lockInstruments() {
@@ -315,7 +345,9 @@ class LockingAPI extends AbstractExternalModule
         
                 if($this->lock_record_level == true) {
                         $this->handleLockRecordLevel($lock);
-                        return "Entire Record(s) have been unlocked/locked.";
+                        $this->readLockRecordLevelStatus();
+
+                        return $this->returnLockRecordLevel();
                 }
                 else {
                         $this->readCurrentLockStatus();
@@ -435,6 +467,12 @@ class LockingAPI extends AbstractExternalModule
                         $return = true;
                 }
                 return $return;
+        }
+
+        protected function returnLockRecordLevel() {
+
+                return json_encode($this->lock_record_status);
+                
         }
         
         protected function formatReturnData() {
