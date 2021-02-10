@@ -45,7 +45,7 @@ class LockingAPI extends AbstractExternalModule
         private $instrument;
         private $instance;
         private $lock_status;
-        private $whole_record;
+        private $lock_record_level;
 
         public function __construct() {
                 parent::__construct();
@@ -93,7 +93,7 @@ class LockingAPI extends AbstractExternalModule
                 $this->event_id = $this->validateEvent();
                 $this->instrument = $this->validateInstrument();
                 $this->instance = $this->validateInstance();
-                $this->whole_record = $this->validateWholeRecord();
+                $this->lock_record_level = $this->validateLockRecordLevel();
         }
         
         protected function validateReturnFormat() {
@@ -178,10 +178,13 @@ class LockingAPI extends AbstractExternalModule
                 return $instance;
         }
 
-        protected function validateWholeRecord() {
-                $whole_record = false;
+        protected function validateLockRecordLevel() {
+                $lock_record_level = false;
+                if(isset($this->post['lock_record_level'])) {
+                        $lock_record_level = $this->post['lock_record_level'];
+                }
                 // TBD
-                return $whole_record;
+                return $lock_record_level;
         }
         
         public function readCurrentLockStatus() {
@@ -258,7 +261,7 @@ class LockingAPI extends AbstractExternalModule
                 $this->lock_status = $eventForms;
         }
 
-        public function handleWholeLock($lock) {
+        public function handleLockRecordLevel(bool $lock) {
                 $isWholeRecordLocked = \Locking::isWholeRecordLocked($this->project_id, $this->record, $this->arm_id);
                 if($lock == true && !$isWholeRecordLocked) {
                         \Locking::lockWholeRecord($this->project_id, $this->record, $this->arm_id);
@@ -285,9 +288,9 @@ class LockingAPI extends AbstractExternalModule
         protected function updateLockStatus($lock=true) {
                 $this->processLockingApiRequest();
 
-                if($this->whole_record === true) {
+                if($this->lock_record_level === true) {
 
-                        $this->handleWholeLock($lock);
+                        $this->handleLockRecordLevel($lock);
                         # public function lockWholeRecord($project_id, $record, $arm=1)
                         return "Entire Record(s) have been locked.";
                 }
