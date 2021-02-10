@@ -257,7 +257,17 @@ class LockingAPI extends AbstractExternalModule
 
                 $this->lock_status = $eventForms;
         }
-        
+
+        public function handleWholeLock($lock) {
+                $isWholeRecordLocked = \Locking::isWholeRecordLocked($this->project_id, $this->record, $this->arm_id);
+                if($lock == true && !$isWholeRecordLocked) {
+                        \Locking::lockWholeRecord($this->project_id, $this->record, $this->arm_id);
+                } 
+                else if ($lock == false && $isWholeRecordLocked) {
+                        \Locking::unlockWholeRecord($this->project_id, $this->record, $this->arm_id);
+                }
+        }
+       
         public function readStatus() {
                 $this->processLockingApiRequest();
                 $this->readCurrentLockStatus();
@@ -276,7 +286,9 @@ class LockingAPI extends AbstractExternalModule
                 $this->processLockingApiRequest();
 
                 if($this->whole_record === true) {
-                        // TBD $this->handleWholeLock()
+
+                        $this->handleWholeLock($lock);
+                        # public function lockWholeRecord($project_id, $record, $arm=1)
                         return "Entire Record(s) have been locked.";
                 }
                 else {
