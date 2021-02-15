@@ -3,6 +3,8 @@
 
 	"namespace": "MCRI\\LockingAPI",
 
+	"framework-version": 6,
+
 	"authors": [
 		{
 			"name": "Luke Stevens",
