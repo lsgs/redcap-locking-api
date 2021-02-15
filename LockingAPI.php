@@ -121,15 +121,27 @@ class LockingAPI extends AbstractExternalModule
                 } 
 
                 # Accept multiple records and check if they exist if input format is json
-                if($this->post['format'] == 'json') {
+                if($this->format == 'json') {
 
+                        $records = array();
+
+                        if(is_array($this->post['record'])) {
+                                # Support array parameter via curl
+                                $records = $this->post['record'];
+                        } else {
+                                # Transform json into array
+                                $records = json_decode($this->post['record']);
+                        }
+                        
                         # Taken and edited from API > record > delete.php:delRecords()
                         // First check if all records submitted exist
-	                $existingRecords = \Records::getData('array', $this->post['record'], $this->Proj->table_pk);
+	                $existingRecords = \Records::getData('array', $records, $this->Proj->table_pk);
                         // Return error if some records don't exist
-                        if (count($existingRecords) != count($this->post['record'])) {
-                                self::errorResponse("One or more of the supplied records do not exist. Relevant record IDs:" . " " . implode(", ", array_diff($this->post['record'], array_keys($existingRecords))));
+                        if (count($existingRecords) != count($records)) {
+                                self::errorResponse("One or more of the supplied records do not exist. Not existing record IDs:" . " " . implode(", ", array_diff($records, array_keys($existingRecords))));
                         }
+
+                        return $records;
                 }
                 else {
                         $this->post['record'] = urldecode($this->post['record']);
@@ -143,10 +155,11 @@ class LockingAPI extends AbstractExternalModule
                         if (count($rec)===0) { 
                                 self::errorResponse("Record '".$this->post['record']."' not found."); 
                         }
+
+                        return $this->post['record'];
                 }
 
                 
-                return $this->post['record'];
         }
         
         protected function validateEvent() {
@@ -204,7 +217,7 @@ class LockingAPI extends AbstractExternalModule
 
         protected function validateLockRecordLevel() {
                 $lock_record_level = false;
-                if(isset($this->post['lock_record_level'])  && $this->post['lock_record_level']!=='' ) {
+                if(isset($this->post['lock_record_level'])  && $this->post['lock_record_level']!=='' && $this->post['lock_record_level']!== 'false' ) {
                         $lock_record_level = $this->post['lock_record_level'];
                 }
 
@@ -328,13 +341,17 @@ class LockingAPI extends AbstractExternalModule
         }
 
         public function handleLockRecordLevel(bool $lock) {
-                $isWholeRecordLocked = Locking::isWholeRecordLocked($this->project_id, $this->record, $this->arm);
-                if($lock == true && !$isWholeRecordLocked) {
-                        Locking::lockWholeRecord($this->project_id, $this->record, $this->arm);
-                } 
-                else if ($lock == false && $isWholeRecordLocked) {
-                        Locking::unlockWholeRecord($this->project_id, $this->record, $this->arm);
+
+                foreach($this->record as $record) {
+                        $isWholeRecordLocked = Locking::isWholeRecordLocked($this->project_id, $record, $this->arm);
+                        if($lock == true && !$isWholeRecordLocked) {
+                                Locking::lockWholeRecord($this->project_id, $record, $this->arm);
+                        } 
+                        else if ($lock == false && $isWholeRecordLocked) {
+                                Locking::unlockWholeRecord($this->project_id, $record, $this->arm);
+                        }
                 }
+
         }
 
              
@@ -352,34 +369,44 @@ class LockingAPI extends AbstractExternalModule
         }
 
         public function readLockRecordLevelStatus() {
-                
-                $query = $this->query('
+
+                # Prepare Query
+                $query = $this->createQuery();
+                $query->add('
                         SELECT * 
                         FROM `redcap_locking_records`                         
-                        WHERE `record` = ?
-                        AND `project_id` = ? 
+                        WHERE `project_id` = ? 
                         AND `arm_id` = ?
                 ',
-                [
-                        $this->record,
+                [                        
                         $this->project_id,
                         $this->arm_id
-                ]);
+                ]);                
+                $query->add('and')->addInClause('record', $this->record);
 
-                
-                if( $query->num_rows == 0 ) {
-                        $this->lock_record_status = array(
+                $result = $query->execute();
+                $unlocked_records = $this->record;
+
+                # Push locked records into status response
+                while($row = $result->fetch_assoc()) {
+                        $this->lock_record_status[] = $row;
+                        $key = array_search ($row["record"], $unlocked_records);
+                        unset($unlocked_records[$key]);
+                }
+
+                # Push unlocked records into status response
+                foreach ($unlocked_records as $unlocked_record) {
+
+                        $this->lock_record_status[] = array( 
                                 "lr_id" => null,
                                 "project_id" => $this->project_id,
-                                "record"=>$this->record, 
+                                "record" => $unlocked_record, 
                                 "arm_id" => $this->arm_id, 
                                 "username" =>  null,
                                 "timestamp" => null
                         );
                 }
-                else {
-                        $this->lock_record_status = $query->fetch_object();
-                }
+
 
         }
 
