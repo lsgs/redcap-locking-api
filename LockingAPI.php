@@ -215,25 +215,7 @@ class LockingAPI extends AbstractExternalModule
                 $this->arm_id = $this->Proj->events[$arm]['id'];
                 return $arm;
         }
-        
-        public function readLockRecordLevelStatus() {
-                
-                $query = $this->query('
-                        SELECT * 
-                        FROM `redcap_locking_records`                         
-                        WHERE `record` = ?
-                        AND `project_id` = ? 
-                        AND `arm_id` = ?
-                ',
-                [
-                        $this->record,
-                        $this->project_id,
-                        $this->arm_id
-                ]);
-
-                $this->lock_record_status = $query->fetch_object();
-        }
-        
+               
         public function readCurrentLockStatus() {
                 if ($this->Proj->longitudinal) {
                         $events = REDCap::getEventNames(true, false);
@@ -317,11 +299,11 @@ class LockingAPI extends AbstractExternalModule
                         Locking::unlockWholeRecord($this->project_id, $this->record, $this->arm);
                 }
         }
-       
+
+             
         public function readStatus() {
                 $this->processLockingApiRequest();
                 if($this->lock_record_level == true) {
-                        
                         $this->readLockRecordLevelStatus();
                         return $this->returnLockRecordLevel();
                 }
@@ -330,6 +312,61 @@ class LockingAPI extends AbstractExternalModule
                         return $this->formatReturnData();
                 }
 
+        }
+
+        public function readLockRecordLevelStatus() {
+                
+                $query = $this->query('
+                        SELECT * 
+                        FROM `redcap_locking_records`                         
+                        WHERE `record` = ?
+                        AND `project_id` = ? 
+                        AND `arm_id` = ?
+                ',
+                [
+                        $this->record,
+                        $this->project_id,
+                        $this->arm_id
+                ]);
+
+                
+                if( $query->num_rows == 0 ) {
+                        $this->lock_record_status = array(
+                                "lr_id" => null,
+                                "project_id" => $this->project_id,
+                                "record"=>$this->record, 
+                                "arm_id" => $this->arm_id, 
+                                "username" =>  null,
+                                "timestamp" => null
+                        );
+                }
+                else {
+                        $this->lock_record_status = $query->fetch_object();
+                }
+
+        }
+
+        protected function returnLockRecordLevel() {              
+
+                if($this->returnFormat == 'json') {
+                        $response = json_encode($this->lock_record_status);
+                }
+                else if($this->returnFormat == 'csv') {
+                        $response = implode (",", array_keys( (array) $this->lock_record_status))."\n";
+                        $response .= implode (", ",  (array) $this->lock_record_status);
+                }
+                else {
+                        $response = '<?xml version="1.0" encoding="UTF-8" ?><lock_record_level_status>';
+
+                        foreach($this->lock_record_status as $key => $value) {
+                                $response .= "<$key>$value</$key>";
+                        }
+
+                        $response .= "</lock_record_level_status>";
+                }
+
+                RestUtility::sendResponse(200, $response, $this->returnFormat);
+                
         }
         
         public function lockInstruments() {
@@ -467,12 +504,6 @@ class LockingAPI extends AbstractExternalModule
                         $return = true;
                 }
                 return $return;
-        }
-
-        protected function returnLockRecordLevel() {
-
-                return json_encode($this->lock_record_status);
-                
         }
         
         protected function formatReturnData() {
