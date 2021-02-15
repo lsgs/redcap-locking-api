@@ -49,6 +49,7 @@ class LockingAPI extends AbstractExternalModule
         private $lock_record_status;
         private $arm;
         private $arm_id;
+        private $format;
 
         public function __construct() {
                 parent::__construct();
@@ -92,11 +93,12 @@ class LockingAPI extends AbstractExternalModule
         protected function validatePostParams() {
                 if (!isset($this->Proj)) { throw new Exception("Can't validate POST params without first setting Proj."); }
                 $this->returnFormat = $this->validateReturnFormat();
+                $this->lock_record_level = $this->validateLockRecordLevel();
+                $this->format = $this->validateFormat();                
                 $this->record = $this->validateRecord();
                 $this->event_id = $this->validateEvent();
                 $this->instrument = $this->validateInstrument();
                 $this->instance = $this->validateInstance();
-                $this->lock_record_level = $this->validateLockRecordLevel();
                 $this->arm = $this->validateArm();
 
         }
@@ -115,18 +117,35 @@ class LockingAPI extends AbstractExternalModule
 
         protected function validateRecord() {
                 if (!isset($this->post['record']) || $this->post['record']==='') {
-                        self::errorResponse("Record not supplied.");
+                        self::errorResponse("Record(s) not supplied.");
                 } 
-                $this->post['record'] = urldecode($this->post['record']);
-                
-                $rec = REDCap::getData(array(
-                        'records'=>$this->post['record'],
-                        'groups'=>$this->user_rights['group_id']
-                    ));
-                
-                if (count($rec)===0) { 
-                        self::errorResponse("Record '".$this->post['record']."' not found."); 
+
+                # Accept multiple records and check if they exist if input format is json
+                if($this->post['format'] == 'json') {
+
+                        # Taken and edited from API > record > delete.php:delRecords()
+                        // First check if all records submitted exist
+	                $existingRecords = \Records::getData('array', $this->post['record'], $this->Proj->table_pk);
+                        // Return error if some records don't exist
+                        if (count($existingRecords) != count($this->post['record'])) {
+                                self::errorResponse("One or more of the supplied records do not exist. Relevant record IDs:" . " " . implode(", ", array_diff($this->post['record'], array_keys($existingRecords))));
+                        }
                 }
+                else {
+                        $this->post['record'] = urldecode($this->post['record']);
+                
+                        $rec = REDCap::getData(array(
+                                'records'=>$this->post['record'],
+                                'groups'=>$this->user_rights['group_id']
+                            ));
+        
+                        
+                        if (count($rec)===0) { 
+                                self::errorResponse("Record '".$this->post['record']."' not found."); 
+                        }
+                }
+
+                
                 return $this->post['record'];
         }
         
@@ -190,6 +209,24 @@ class LockingAPI extends AbstractExternalModule
                 }
 
                 return $lock_record_level;
+        }
+
+        public function validateFormat() {
+                $format = "";
+                if(isset($this->post['format']) && $this->post['format']!=='' ) {
+
+                        if($this->post['format'] == 'json') {
+
+                                if($this->lock_record_level != true) {
+                                        self::errorResponse("JSON format is not yet supported for this type of request.");
+                                        exit();
+                                }
+
+                                $format = $this->post['format'];
+                        }
+                }
+
+                return $format;
         }
 
         public function validateArm() {
