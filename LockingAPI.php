@@ -48,7 +48,6 @@ class LockingAPI extends AbstractExternalModule
         private $lock_record_level;
         private $lock_record_status;
         private $arm;
-        private $arm_id;
         private $format;
 
         public function __construct() {
@@ -138,7 +137,7 @@ class LockingAPI extends AbstractExternalModule
                         if($this->post['format'] == 'json') {
 
                                 # Disallow json format on data level since it is not supported yet. TBD
-                                if($this->lock_record_level != true) {
+                                if(!$this->lock_record_level) {
                                         self::errorResponse("JSON format is not yet supported for this type of request.");
                                         exit();
                                 }
@@ -153,7 +152,7 @@ class LockingAPI extends AbstractExternalModule
         protected function validateRecord() {
                 if (!isset($this->post['record']) || $this->post['record']==='') {
                         self::errorResponse("Record(s) not supplied.");
-                } 
+                }
 
                 # Accept multiple records and check if they exist if input format is json
                 if($this->format == 'json') {
@@ -251,26 +250,29 @@ class LockingAPI extends AbstractExternalModule
         }
 
         public function validateArm() {
+
+                # Type cast to array if record is singular and is not submitted via php/curl
+                // This is dirty but necessary so that non-json format record input can still be supported during record level lock
+                if( $this->format !== 'json' && !is_array($this->record) && $this->lock_record_level) {
+                        $this->record = (array) $this->record; 
+                }
+
                 $arm = 1;
                 if( isset($this->post['arm']) && $this->post['arm']!=='' ) {
                         # Check if arm exists
-                        if( isset($this->Proj->events[$this->post['arm']]['id']) ) {                                
-                                # Check if record exists within arm                                                              
-                                $recordInArm = count(\Records::getRecordList( $this->project_id, array(), false, false, $this->post['arm'], null, 0, $this->record ));
-
-                                if( $recordInArm > 0 ) {
-                                        $arm = $this->post['arm'];
-                                }
-                                else {
-                                        $invalid_arm = $this->post['arm'];
-                                        self::errorResponse("Record with ID $this->record is not included in arm $invalid_arm");   
-                                }
+                        if( !isset($this->Proj->events[$this->post['arm']]['id']) ) {       
+                                self::errorResponse("Invalid arm $arm");                         
                         }
-                        else {
-                                self::errorResponse("Invalid arm $arm"); 
-                        }
+                        $arm = $this->post['arm'];
                 }
-                $this->arm_id = $this->Proj->events[$arm]['id'];
+
+                # Check if record(s) exists within arm                                                              
+                $recordsInArm = \Records::getRecordList( $this->project_id, array(), false, false, $this->post['arm'], null, 0, $this->record );
+
+                if (count($recordsInArm) != count($this->record)) {
+                        self::errorResponse("One or more of the supplied records are not part of arm $arm. Invalid record IDs:" . " " . implode(", ", array_diff($this->record, array_keys($recordsInArm))));
+                }
+
                 return $arm;
         }
                
@@ -365,7 +367,7 @@ class LockingAPI extends AbstractExternalModule
              
         public function readStatus() {
                 $this->processLockingApiRequest();
-                if($this->lock_record_level == true) {
+                if($this->lock_record_level) {
                         $this->readLockRecordLevelStatus();
                         return $this->returnLockRecordLevel();
                 }
@@ -377,7 +379,7 @@ class LockingAPI extends AbstractExternalModule
         }
 
         public function readLockRecordLevelStatus() {
-
+                
                 # Prepare Query
                 $query = $this->createQuery();
                 $query->add('
@@ -464,7 +466,7 @@ class LockingAPI extends AbstractExternalModule
         protected function updateLockStatus($lock=true) {
                 $this->processLockingApiRequest();
         
-                if($this->lock_record_level == true) {
+                if($this->lock_record_level) {
                         $this->handleLockRecordLevel($lock);
                         $this->readLockRecordLevelStatus();
 
