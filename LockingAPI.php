@@ -126,7 +126,7 @@ class LockingAPI extends AbstractExternalModule
                         $records = array();
 
                         if(is_array($this->post['record'])) {
-                                # Support array parameter via curl
+                                # Support array parameter via php/curl
                                 $records = $this->post['record'];
                         } else {
                                 # Transform json into array
@@ -416,19 +416,29 @@ class LockingAPI extends AbstractExternalModule
                         $response = json_encode($this->lock_record_status);
                 }
                 else if($this->returnFormat == 'csv') {
-                        $response = implode (",", array_keys( (array) $this->lock_record_status))."\n";
-                        $response .= implode (", ",  (array) $this->lock_record_status);
+
+                        # Generate csv header from first object element, using object{0} to access
+                        $response = implode(",", array_keys($this->lock_record_status{0}))."\n";
+                        # Add rows as comma-separated list
+                        foreach((array) $this->lock_record_status as $row) {
+                                $response .= implode (", ", $row)."\n";
+                        }
+                        
                 }
                 else {
-                        $response = '<?xml version="1.0" encoding="UTF-8" ?><lock_record_level_status>';
+                        $response = '<?xml version="1.0" encoding="UTF-8" ?>';
 
-                        foreach($this->lock_record_status as $key => $value) {
-                                $response .= "<$key>$value</$key>";
-                        }
+                        foreach($this->lock_record_status as $status) {
+                                $response .= '<lock_record_level_status>';
 
-                        $response .= "</lock_record_level_status>";
+                                foreach($status as $key => $value) {
+                                        $response .= "<$key>$value</$key>";
+                                }
+                                $response .= '</lock_record_level_status>';
+                        }                        
+                        $response .= "</xml>";
                 }
-
+                # Send response with correct formatting
                 RestUtility::sendResponse(200, $response, $this->returnFormat);
                 
         }
