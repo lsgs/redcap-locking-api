@@ -10,10 +10,15 @@
 			"name": "Luke Stevens",
 			"email": "luke.stevens@mcri.edu.au",
 			"institution": "Murdoch Children's Research Institute"
-		}
+		},
+		{
+			"name": "Ekin Tertemiz",
+			"email": "ekin.tertemiz@swisstph.ch",
+			"institution": "Swiss Tropical and Public Health Institute"
+		}		
 	],
 
-	"description": "Lock, unlock and read the lock status of instruments using API calls.",
+	"description": "Lock, unlock and read the lock status of instruments or entire records using API calls.",
         
         "permissions": [
                 "read redcap_locking_data",

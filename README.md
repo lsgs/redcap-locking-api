@@ -147,4 +147,9 @@ record,redcap_event_name,instrument,instance,lock_status,username,timestamp
 
 ## Min REDCap Version
 Min REDCap version is 8.2.3 due to use of array as argument to `REDCap::getData()` when checking existence of record.
+
+
+## Contributor(s)
+Ekin Tertemiz, Swiss Tropical and Public Health Institute
+
 ********************************************************************************

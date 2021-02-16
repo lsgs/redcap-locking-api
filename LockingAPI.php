@@ -3,7 +3,7 @@
  * REDCap External Module: Locking API
  * Lock, unlock and read the lock status of instruments and entire records using API calls
  * @author Luke Stevens, Murdoch Children's Research Institute
- * @author Ekin Tertemiz, Swiss Tropical and Public Health Institute
+ * contributor: Ekin Tertemiz, Swiss Tropical and Public Health Institute
  * 
  */
 namespace MCRI\LockingAPI;
