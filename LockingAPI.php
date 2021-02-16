@@ -230,6 +230,7 @@ class LockingAPI extends AbstractExternalModule
 
                         if($this->post['format'] == 'json') {
 
+                                # Disallow json format on data level since it is not supported yet. TBD
                                 if($this->lock_record_level != true) {
                                         self::errorResponse("JSON format is not yet supported for this type of request.");
                                         exit();
@@ -248,7 +249,7 @@ class LockingAPI extends AbstractExternalModule
                         # Check if arm exists
                         if( isset($this->Proj->events[$this->post['arm']]['id']) ) {                                
                                 # Check if record exists within arm                                                              
-                                $recordInArm = $recordInArm = count(\Records::getRecordList( $this->project_id, array(), false, false, $this->post['arm'], null, 0, $this->record ));
+                                $recordInArm = count(\Records::getRecordList( $this->project_id, array(), false, false, $this->post['arm'], null, 0, $this->record ));
 
                                 if( $recordInArm > 0 ) {
                                         $arm = $this->post['arm'];
@@ -380,7 +381,8 @@ class LockingAPI extends AbstractExternalModule
                 ',
                 [                        
                         $this->project_id,
-                        $this->arm_id
+                        # Get arm id from arm
+                        $this->Proj->events[$this->arm]['id']
                 ]);                
                 $query->add('and')->addInClause('record', $this->record);
 
@@ -401,7 +403,8 @@ class LockingAPI extends AbstractExternalModule
                                 "lr_id" => null,
                                 "project_id" => $this->project_id,
                                 "record" => $unlocked_record, 
-                                "arm_id" => $this->arm_id, 
+                                # Get arm id from arm
+                                "arm_id" => $this->Proj->events[$this->arm]['id'], 
                                 "username" =>  null,
                                 "timestamp" => null
                         );
