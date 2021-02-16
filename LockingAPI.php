@@ -94,13 +94,19 @@ class LockingAPI extends AbstractExternalModule
                 if (!isset($this->Proj)) { throw new Exception("Can't validate POST params without first setting Proj."); }
                 $this->returnFormat = $this->validateReturnFormat();
                 $this->lock_record_level = $this->validateLockRecordLevel();
-                $this->format = $this->validateFormat();                
+                $this->format = $this->validateFormat();
                 $this->record = $this->validateRecord();
-                $this->event_id = $this->validateEvent();
-                $this->instrument = $this->validateInstrument();
-                $this->instance = $this->validateInstance();
-                $this->arm = $this->validateArm();
 
+                # Validate on data level
+                if( !$this->lock_record_level) {
+                        $this->event_id = $this->validateEvent();
+                        $this->instrument = $this->validateInstrument();
+                        $this->instance = $this->validateInstance();
+                } 
+                # Validate on record level
+                else {
+                        $this->arm = $this->validateArm();
+                }
         }
         
         protected function validateReturnFormat() {
@@ -115,11 +121,11 @@ class LockingAPI extends AbstractExternalModule
                         : 'xml';
         }
 
-        protected function validateLockRecordLevel() {
-                $lock_record_level = false;
+        protected function validateLockRecordLevel() :bool {
+                $lock_record_level = (bool) false;
                 # Check if is set and 'true' or true (boolean)
                 if(isset($this->post['lock_record_level'])  && $this->post['lock_record_level']!=='' && ($this->post['lock_record_level'] === 'true' || $this->post['lock_record_level'] === true) ) {
-                        $lock_record_level = $this->post['lock_record_level'];
+                        $lock_record_level = true;
                 }
 
                 return $lock_record_level;
