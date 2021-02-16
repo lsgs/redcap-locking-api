@@ -6,7 +6,7 @@
 error_reporting(0);
 
 try {
-        $result = $module->unlockInstruments();
+        $result = $module->updateLockStatus(false);
 } catch (Exception $ex) {
         RestUtility::sendResponse(400, $ex->getMessage());
 }
