@@ -115,6 +115,35 @@ class LockingAPI extends AbstractExternalModule
                         : 'xml';
         }
 
+        protected function validateLockRecordLevel() {
+                $lock_record_level = false;
+                # Check if is set and 'true' or true (boolean)
+                if(isset($this->post['lock_record_level'])  && $this->post['lock_record_level']!=='' && ($this->post['lock_record_level'] === 'true' || $this->post['lock_record_level'] === true) ) {
+                        $lock_record_level = $this->post['lock_record_level'];
+                }
+
+                return $lock_record_level;
+        }
+
+        public function validateFormat() {
+                $format = "";
+                if(isset($this->post['format']) && $this->post['format']!=='' ) {
+
+                        if($this->post['format'] == 'json') {
+
+                                # Disallow json format on data level since it is not supported yet. TBD
+                                if($this->lock_record_level != true) {
+                                        self::errorResponse("JSON format is not yet supported for this type of request.");
+                                        exit();
+                                }
+
+                                $format = $this->post['format'];
+                        }
+                }
+
+                return $format;
+        }
+
         protected function validateRecord() {
                 if (!isset($this->post['record']) || $this->post['record']==='') {
                         self::errorResponse("Record(s) not supplied.");
@@ -213,34 +242,6 @@ class LockingAPI extends AbstractExternalModule
                         }
                 }
                 return $instance;
-        }
-
-        protected function validateLockRecordLevel() {
-                $lock_record_level = false;
-                if(isset($this->post['lock_record_level'])  && $this->post['lock_record_level']!=='' && $this->post['lock_record_level']!== 'false' ) {
-                        $lock_record_level = $this->post['lock_record_level'];
-                }
-
-                return $lock_record_level;
-        }
-
-        public function validateFormat() {
-                $format = "";
-                if(isset($this->post['format']) && $this->post['format']!=='' ) {
-
-                        if($this->post['format'] == 'json') {
-
-                                # Disallow json format on data level since it is not supported yet. TBD
-                                if($this->lock_record_level != true) {
-                                        self::errorResponse("JSON format is not yet supported for this type of request.");
-                                        exit();
-                                }
-
-                                $format = $this->post['format'];
-                        }
-                }
-
-                return $format;
         }
 
         public function validateArm() {
