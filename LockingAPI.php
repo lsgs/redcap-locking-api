@@ -1,8 +1,10 @@
 <?php
 /**
  * REDCap External Module: Locking API
- * Lock, unlock and read the lock status of instruments using API calls
+ * Lock, unlock and read the lock status of instruments and entire records using API calls
  * @author Luke Stevens, Murdoch Children's Research Institute
+ * contributor: Ekin Tertemiz, Swiss Tropical and Public Health Institute
+ * 
  */
 namespace MCRI\LockingAPI;
 
@@ -13,6 +15,7 @@ use Logging;
 use Project;
 use REDCap;
 use RestUtility;
+use Locking;
 
 /**
  * REDCap External Module: Locking API
@@ -44,6 +47,10 @@ class LockingAPI extends AbstractExternalModule
         private $instrument;
         private $instance;
         private $lock_status;
+        private $lock_record_level;
+        private $lock_record_status;
+        private $arm;
+        private $format;
 
         public function __construct() {
                 parent::__construct();
@@ -87,10 +94,20 @@ class LockingAPI extends AbstractExternalModule
         protected function validatePostParams() {
                 if (!isset($this->Proj)) { throw new Exception("Can't validate POST params without first setting Proj."); }
                 $this->returnFormat = $this->validateReturnFormat();
+                $this->lock_record_level = $this->validateLockRecordLevel();
+                $this->format = $this->validateFormat();
                 $this->record = $this->validateRecord();
-                $this->event_id = $this->validateEvent();
-                $this->instrument = $this->validateInstrument();
-                $this->instance = $this->validateInstance();
+
+                # Validate on data level
+                if( !$this->lock_record_level) {
+                        $this->event_id = $this->validateEvent();
+                        $this->instrument = $this->validateInstrument();
+                        $this->instance = $this->validateInstance();
+                } 
+                # Validate on record level
+                else {
+                        $this->arm = $this->validateArm();
+                }
         }
         
         protected function validateReturnFormat() {
@@ -105,21 +122,74 @@ class LockingAPI extends AbstractExternalModule
                         : 'xml';
         }
 
+        protected function validateLockRecordLevel() :bool {
+                $lock_record_level = (bool) false;
+                # Check if is set and 'true' or true (boolean)
+                if(isset($this->post['lock_record_level'])  && $this->post['lock_record_level']!=='' && ($this->post['lock_record_level'] === 'true' || $this->post['lock_record_level'] === true) ) {
+                        $lock_record_level = true;
+                }
+
+                return $lock_record_level;
+        }
+
+        public function validateFormat() {
+                $format = "";
+                if(isset($this->post['format']) && $this->post['format']!=='' ) {
+
+                        if($this->post['format'] == 'json') {
+
+                                # Disallow json format on data level since it is not supported yet. TBD
+                                if(!$this->lock_record_level) {
+                                        self::errorResponse("JSON format is not yet supported for this type of request.");
+                                }
+
+                                $format = $this->post['format'];
+                        }
+                }
+
+                return $format;
+        }
+
         protected function validateRecord() {
                 if (!isset($this->post['record']) || $this->post['record']==='') {
-                        self::errorResponse("Record not supplied.");
-                } 
-                $this->post['record'] = urldecode($this->post['record']);
-                
-                $rec = REDCap::getData(array(
-                        'records'=>$this->post['record'],
-                        'groups'=>$this->user_rights['group_id']
-                    ));
-                
-                if (count($rec)===0) { 
-                        self::errorResponse("Record '".$this->post['record']."' not found."); 
+                        self::errorResponse("Record(s) not supplied.");
                 }
-                return $this->post['record'];
+
+                # Accept multiple records and check if they exist if input format is json
+                if($this->format == 'json') {
+
+                        $records = array();
+
+                        if(is_array($this->post['record'])) {
+                                # Support array parameter via php/curl
+                                $records = $this->post['record'];
+                        } else {
+                                # Transform json into array
+                                $records = json_decode($this->post['record']);
+                        }
+                        
+                        # Taken and edited from API > record > delete.php:delRecords()
+                        // First check if all records submitted exist
+	                $existingRecords = \Records::getData('array', $records, $this->Proj->table_pk);
+                        // Return error if some records don't exist
+                        if (count($existingRecords) != count($records)) {
+                                self::errorResponse("One or more of the supplied records do not exist. Not existing record IDs:" . " " . implode(", ", array_diff($records, array_keys($existingRecords))));
+                        }
+
+                        return $records;
+                }
+                else {
+                        $this->post['record'] = urldecode($this->post['record']);               
+                        $rec = REDCap::getData(array(
+                                'records'=>$this->post['record'],
+                                'groups'=>$this->user_rights['group_id']
+                            ));        
+                        
+                        if (count($rec)===0) { 
+                                self::errorResponse("Record '".$this->post['record']."' not found."); 
+                        }
+                        return $this->post['record'];
+                }                
         }
         
         protected function validateEvent() {
@@ -174,8 +244,173 @@ class LockingAPI extends AbstractExternalModule
                 }
                 return $instance;
         }
+
+        public function validateArm() {
+
+                # Type cast to array if record is singular and is not submitted via php/curl
+                // This is dirty but necessary so that non-json format record input can still be supported during record level lock. TBD
+                if( $this->format !== 'json' && !is_array($this->record) && $this->lock_record_level) {
+                        $this->record = (array) $this->record; 
+                }
+
+                $arm = 1;
+                if( isset($this->post['arm']) && $this->post['arm']!=='' ) {
+                        # Check if arm exists
+                        if( !isset($this->Proj->events[$this->post['arm']]['id']) ) {       
+                                self::errorResponse("Invalid arm $arm");                         
+                        }
+                        $arm = $this->post['arm'];
+                }
+
+                # Check if record(s) exists within arm                                                              
+                $recordsInArm = \Records::getRecordList( $this->project_id, array(), false, false, $this->post['arm'], null, 0, $this->record );
+
+                if (count($recordsInArm) != count($this->record)) {
+                        self::errorResponse("One or more of the supplied records are not part of arm $arm. Invalid record IDs:" . " " . implode(", ", array_diff($this->record, array_keys($recordsInArm))));
+                }
+
+                return $arm;
+        }
+
+        /** 
+         * readStatus()
+         * Module method called from module page "status.php". Serves as API endpoint controller. 
+         * Returns lock status on data or record level, of single or multiple record(s) in a specified return format.
+        */
+        public function readStatus() {
+                $this->processLockingApiRequest();
+                if($this->lock_record_level) {
+                        $this->readLockStatusRecordLevel();
+                        return $this->formatReturnRecordLevel();
+                }
+                else {
+                        $this->readLockStatusDataLevel();
+                        return $this->formatReturnDataLevel();
+                }
+
+        }
+
+        /** 
+         * updateLockStatus()
+         * Module method called from module pages "lock.php" and "unlock.php". Serves as API endpoint controller. 
+         * Locks/Unlocks a single or multiple record(s) on data or record level, and returns there current status in a specified format.
+         * @param bool $lock
+        */
+        public function updateLockStatus(bool $lock=true) {
+                $this->processLockingApiRequest();
         
-        public function readCurrentLockStatus() {
+                if($this->lock_record_level) {
+                        $this->handleLockRecordLevel($lock);
+                        $this->readLockStatusRecordLevel();
+                        return $this->formatReturnRecordLevel();
+                }
+                else {
+                        $this->readLockStatusDataLevel();
+                        $this->handleLockDataLevel($lock);
+                        return $this->formatReturnDataLevel();
+                }
+                               
+        }
+
+        protected function handleLockRecordLevel(bool $lock) {
+
+                foreach($this->record as $record) {
+                        $isWholeRecordLocked = Locking::isWholeRecordLocked($this->project_id, $record, $this->arm);
+                        if($lock == true && !$isWholeRecordLocked) {
+                                Locking::lockWholeRecord($this->project_id, $record, $this->arm);
+                        } 
+                        else if ($lock == false && $isWholeRecordLocked) {
+                                Locking::unlockWholeRecord($this->project_id, $record, $this->arm);
+                        }
+                }
+
+        }
+
+        protected function handleLockDataLevel(bool $lock){
+
+                // update redcap_locking_data for submitted instruments
+                $toChange = array();
+                foreach ($this->lock_status as $eventId => $event) {
+                        foreach ($event['event_forms'] as $form_name => $form_data) {
+                                if (count($form_data['data']) > 0) {
+                                        // form has been saved (and is locked or not)
+                                        foreach ($form_data['data'] as $instance => $instanceData) {
+                                                $locked = (isset($instanceData['username']));
+                                                if (($lock && !$locked) || (!$lock && $locked)) { // lock unlocked forms or un lock locked forms 
+                                                        $toChange[] = array(
+                                                                'record'=>$this->record,
+                                                                'event_id'=>$eventId,
+                                                                'instrument'=>$form_name,
+                                                                'instance'=>$instance
+                                                        );
+                                                }
+                                        }
+                                }
+                        }
+                }
+                
+                foreach ($toChange as $thisChange) {
+                        if ($lock) {
+                                $result = $this->writeLock($thisChange['record'], $thisChange['event_id'], $thisChange['instrument'], $thisChange['instance']);
+                                if ($result !== false) {
+                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['username'] = $this->user;
+                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['timestamp'] = $result;
+                                }
+                        } else {
+                                $result = $this->writeUnlock($thisChange['record'], $thisChange['event_id'], $thisChange['instrument'], $thisChange['instance']);
+                                if ($result) {
+                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['username'] = '';
+                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['timestamp'] = '';
+                                }
+                        }
+                }
+        }
+
+        protected function readLockStatusRecordLevel() {
+                
+                # Prepare Query
+                $query = $this->createQuery();
+                $query->add('
+                        SELECT * 
+                        FROM `redcap_locking_records`                         
+                        WHERE `project_id` = ? 
+                        AND `arm_id` = ?
+                ',
+                [                        
+                        $this->project_id,
+                        # Get arm id from arm
+                        $this->Proj->events[$this->arm]['id']
+                ]);                
+                $query->add('and')->addInClause('record', $this->record);
+
+                $result = $query->execute();
+                $unlocked_records = $this->record;
+
+                # Push locked records into status response
+                while($row = $result->fetch_assoc()) {
+                        $this->lock_record_status[] = $row;
+                        $key = array_search ($row["record"], $unlocked_records);
+                        unset($unlocked_records[$key]);
+                }
+
+                # Push unlocked records into status response
+                foreach ($unlocked_records as $unlocked_record) {
+
+                        $this->lock_record_status[] = array( 
+                                "lr_id" => null,
+                                "project_id" => $this->project_id,
+                                "record" => $unlocked_record, 
+                                # Get arm id from arm
+                                "arm_id" => $this->Proj->events[$this->arm]['id'], 
+                                "username" =>  null,
+                                "timestamp" => null
+                        );
+                }
+
+
+        }
+               
+        protected function readLockStatusDataLevel() {
                 if ($this->Proj->longitudinal) {
                         $events = REDCap::getEventNames(true, false);
                 } else {
@@ -248,65 +483,56 @@ class LockingAPI extends AbstractExternalModule
 
                 $this->lock_status = $eventForms;
         }
-        
-        public function readStatus() {
-                $this->processLockingApiRequest();
-                $this->readCurrentLockStatus();
-                return $this->formatReturnData();
-        }
-        
-        public function lockInstruments() {
-                return $this->updateLockStatus(true);
-        }
-        
-        public function unlockInstruments() {
-                return $this->updateLockStatus(false);
-        }
-        
-        protected function updateLockStatus($lock=true) {
-                $this->processLockingApiRequest();
-                $this->readCurrentLockStatus();
-                
-                // update redcap_locking_data for submitted instruments
-                $toChange = array();
-                foreach ($this->lock_status as $eventId => $event) {
-                        foreach ($event['event_forms'] as $form_name => $form_data) {
-                                if (count($form_data['data']) > 0) {
-                                        // form has been saved (and is locked or not)
-                                        foreach ($form_data['data'] as $instance => $instanceData) {
-                                                $locked = (isset($instanceData['username']));
-                                                if (($lock && !$locked) || (!$lock && $locked)) { // lock unlocked forms or un lock locked forms 
-                                                        $toChange[] = array(
-                                                                'record'=>$this->record,
-                                                                'event_id'=>$eventId,
-                                                                'instrument'=>$form_name,
-                                                                'instance'=>$instance
-                                                        );
-                                                }
-                                        }
-                                }
-                        }
-                }
-                
-                foreach ($toChange as $thisChange) {
-                        if ($lock) {
-                                $result = $this->writeLock($thisChange['record'], $thisChange['event_id'], $thisChange['instrument'], $thisChange['instance']);
-                                if ($result !== false) {
-                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['username'] = $this->user;
-                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['timestamp'] = $result;
-                                }
-                        } else {
-                                $result = $this->writeUnlock($thisChange['record'], $thisChange['event_id'], $thisChange['instrument'], $thisChange['instance']);
-                                if ($result) {
-                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['username'] = '';
-                                        $this->lock_status[$thisChange['event_id']]['event_forms'][$thisChange['instrument']]['data'][$thisChange['instance']]['timestamp'] = '';
-                                }
-                        }
-                }
-                
-                return $this->formatReturnData();
-        }
 
+        protected function formatReturnRecordLevel() {              
+
+                if($this->returnFormat == 'json') {
+                        $response = json_encode($this->lock_record_status);
+                }
+                else if($this->returnFormat == 'csv') {
+
+                        # Generate csv header from first object element, using object{0} to access
+                        $response = implode(",", array_keys($this->lock_record_status{0}))."\n";
+                        # Add rows as comma-separated list
+                        foreach((array) $this->lock_record_status as $row) {
+                                $response .= implode (", ", $row)."\n";
+                        }
+                        
+                }
+                else {
+                        $response = '<?xml version="1.0" encoding="UTF-8" ?>';
+
+                        foreach($this->lock_record_status as $status) {
+                                $response .= '<lock_record_level_status>';
+
+                                foreach($status as $key => $value) {
+                                        $response .= "<$key>$value</$key>";
+                                }
+                                $response .= '</lock_record_level_status>';
+                        }                        
+                        $response .= "</xml>";
+                }
+                # Send response with correct formatting
+                RestUtility::sendResponse(200, $response, $this->returnFormat);
+                
+        }
+        
+        protected function formatReturnDataLevel() {
+                $response = '';
+                
+                switch ($this->returnFormat) {
+                    case 'csv':
+                        $response = $this->formatReturnDataLevelCsv();
+                        break;
+                    case 'json':
+                        $response = $this->formatReturnDataLevelJson();
+                        break;
+                    default:
+                        $response = $this->formatReturnDataLevelXml();
+                }
+                return $response;
+        }
+              
         /** 
          * writeLock()
          * Unfortunately the core locking code is not callable so this is 
@@ -381,24 +607,9 @@ class LockingAPI extends AbstractExternalModule
                 }
                 return $return;
         }
+
         
-        protected function formatReturnData() {
-                $response = '';
-                
-                switch ($this->returnFormat) {
-                    case 'csv':
-                        $response = $this->formatReturnDataCsv();
-                        break;
-                    case 'json':
-                        $response = $this->formatReturnDataJson();
-                        break;
-                    default:
-                        $response = $this->formatReturnDataXml();
-                }
-                return $response;
-        }
-        
-        protected function formatReturnDataCsv() {
+        protected function formatReturnDataLevelCsv() {
                 $delim = ',';
                 $includeEvent = $this->Proj->longitudinal;
                 $response = "record,".(($includeEvent)?'redcap_event_name,':'')."instrument,instance,lock_status,username,timestamp";
@@ -437,7 +648,7 @@ class LockingAPI extends AbstractExternalModule
                 return $response;
         }
         
-        protected function formatReturnDataJson() {
+        protected function formatReturnDataLevelJson() {
                 if (isset($this->get['raw'])) { return json_encode($this->lock_status); }
                 
                 $includeEvent = $this->Proj->longitudinal;
@@ -479,7 +690,7 @@ class LockingAPI extends AbstractExternalModule
                 return json_encode($rtn);
         }
         
-        protected function formatReturnDataXml() {
+        protected function formatReturnDataLevelXml() {
                 $includeEvent = $this->Proj->longitudinal;
                 $response = '<?xml version="1.0" encoding="UTF-8" ?><lock_status>';
                 
