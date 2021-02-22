@@ -40,7 +40,7 @@ Return Format options are the usual csv, json or xml (default).
 Locks the entire record if set to true.
 
 ## Format (optional and limited)
-JSON format allows to submit multiple records at once. Currenlty only supported in lock on record level.
+JSON format allows to submit multiple records at once. Currently only supported in lock on record level.
 
 ## Record/Event/Instrument/Instance/Arm Specification
 
@@ -48,7 +48,7 @@ JSON format allows to submit multiple records at once. Currenlty only supported 
 * **event**: A valid unique name or event id for the project (if longitudinal).
 * **instrument**: A valid form name for the project, as per data dictionary.
 * **instance**: Instance number for repeating event or instrument.
-* **arm**: Arm number for projects with multiple arms (if Lock Record Level is used). Dafaults to 1.
+* **arm**: Arm number for projects with multiple arms (if Lock Record Level is used). Defaults to 1.
 
 Event will be ignored if the project is not longitudinal.
 
@@ -105,7 +105,7 @@ Arm will be ignored if Lock Record Level is false.
     ```
 * Set record level lock for record 1001:
     ```http
-    page=lock&record=1001&lock_record_level=true
+    page=lock&record=1001&lock_record_level=1
     ```
 * Unlock record with ID 2432:
     ```http
