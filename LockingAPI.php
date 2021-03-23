@@ -503,7 +503,7 @@ class LockingAPI extends AbstractExternalModule
                 else if($this->returnFormat == 'csv') {
 
                         # Generate csv header from first object element, using object{0} to access
-                        $response = implode(",", array_keys($this->lock_record_status{0}))."\n";
+                        $response = implode(",", array_keys($this->lock_record_status[0]))."\n";
                         # Add rows as comma-separated list
                         foreach((array) $this->lock_record_status as $row) {
                                 $response .= implode (", ", $row)."\n";
