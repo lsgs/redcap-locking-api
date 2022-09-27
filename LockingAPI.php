@@ -323,14 +323,14 @@ class LockingAPI extends AbstractExternalModule
                         if ($Proj->multiple_arms) { 
                                 $log .= " - {$lang['global_08']} $this->arm: ".$Proj->events[$this->arm]['name']; 
                         }
-                        $isWholeRecordLocked = Locking::isWholeRecordLocked($this->project_id, $record, $this->arm);
+			$locking = new Locking;
+                        $isWholeRecordLocked = $locking->isWholeRecordLocked($this->project_id, $record, $this->arm);
                         if($lock == true && !$isWholeRecordLocked) {
-                                Locking::lockWholeRecord($this->project_id, $record, $this->arm);
-                                Logging::logEvent("","redcap_locking_record","LOCK_RECORD",$this->record,$log,"Lock entire record");
-                        } 
+                                $locking->lockWholeRecord($this->project_id, $record, $this->arm);
+                                REDCap::logEvent("Lock entire record.");
                         else if ($lock == false && $isWholeRecordLocked) {
-                                Locking::unlockWholeRecord($this->project_id, $record, $this->arm);
-                                Logging::logEvent("","redcap_locking_record","LOCK_RECORD",$this->record,$log,"Unlock entire record");
+                                $locking->unlockWholeRecord($this->project_id, $record, $this->arm);
+                                REDCap::logEvent("Unlock entire record");
                         }
                 }
         }
