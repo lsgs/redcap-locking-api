@@ -29,7 +29,7 @@ curl -d "token=ABCDEF0123456789ABCDEF0123456789&returnFormat=json&record=1001&ev
 ```
 #### Record Level
 ```bash
-curl -d "token=ABCDEF0123456789ABCDEF0123456789&returnFormat=json&record=1001arm=1&lock_record_level=true"
+curl -d "token=ABCDEF0123456789ABCDEF0123456789&returnFormat=json&record=1001&arm=1&lock_record_level=true"
     "https://redcap.ourplace.edu/api/?NOAUTH&type=module&prefix=locking_api&page=status"
 ```
 
@@ -50,11 +50,11 @@ JSON format allows to submit multiple records at once. Currently only supported 
 * **instance**: Instance number for repeating event or instrument.
 * **arm**: Arm number for projects with multiple arms (if Lock Record Level is used). Defaults to 1.
 
-Event will be ignored if the project is not longitudinal.
+Parameters `arm` and `event` will be ignored if the project is not longitudinal.
 
 If an instance value >=2 is submitted for a non-repeating event/instrument then an error will be returned.
 
-Arm will be ignored if Lock Record Level is false.
+Parameter `arm` will be ignored if Lock Record Level is false.
 
 ### Examples
 #### Data Level

@@ -4,7 +4,6 @@
  * Lock, unlock and read the lock status of instruments and entire records using API calls
  * @author Luke Stevens, Murdoch Children's Research Institute
  * contributor: Ekin Tertemiz, Swiss Tropical and Public Health Institute
- * 
  */
 namespace MCRI\LockingAPI;
 
@@ -22,6 +21,7 @@ use Locking;
  */
 class LockingAPI extends AbstractExternalModule
 {
+        const CSV_DELIMITER = ',';
         protected static $AllowedFormats = array('json', 'csv', 'xml');
         
         protected static function errorResponse($message) {
@@ -96,7 +96,7 @@ class LockingAPI extends AbstractExternalModule
         }
 
         protected function validatePostParams() {
-                if (!isset($this->Proj)) { throw new Exception("Can't validate POST params without first setting Proj."); }
+                if (!isset($this->Proj)) { throw new \Exception("Can't validate POST params without first setting Proj."); }
                 $this->returnFormat = $this->validateReturnFormat();
                 $this->lock_record_level = $this->validateLockRecordLevel();
                 $this->format = $this->validateFormat();
@@ -159,31 +159,31 @@ class LockingAPI extends AbstractExternalModule
                         self::errorResponse("Record(s) not supplied.");
                 }
 
-                # Accept multiple records and check if they exist if input format is json
-                if($this->format == 'json') {
-
+                # Accept multiple records if record level lock request only
+                if ($this->lock_record_level) {
                         $records = array();
-
                         if(is_array($this->post['record'])) {
                                 # Support array parameter via php/curl
                                 $records = $this->post['record'];
-                        } else {
+                        } else if ($this->format == 'json') {
                                 # Transform json into array
                                 $records = json_decode($this->post['record']);
                         }
                         
                         # Taken and edited from API > record > delete.php:delRecords()
                         // First check if all records submitted exist
-	                    $existingRecords = \Records::getData('array', $records, $this->Proj->table_pk);
+	                    $existingRecords = \Records::getData('array', $records, $this->Proj->table_pk, null, $this->user_rights['group_id']);
                         // Return error if some records don't exist
                         if (count($existingRecords) != count($records)) {
-                                self::errorResponse("One or more of the supplied records do not exist. Not existing record IDs:" . " " . implode(", ", array_diff($records, array_keys($existingRecords))));
+                                self::errorResponse("One or more of the supplied records do not exist: " . implode(", ", array_diff($records, array_keys($existingRecords))));
                         }
 
                         return $records;
-                }
-                else {
-                        $this->post['record'] = urldecode($this->post['record']);               
+                } else {
+                        if (is_array($this->post['record'])) {
+                                self::errorResponse("Instrument level requests support only one record at a time."); 
+                        }
+                        $this->post['record'] = @urldecode($this->post['record']);               
                         $rec = REDCap::getData(array(
                                 'records'=>$this->post['record'],
                                 'groups'=>$this->user_rights['group_id']
@@ -307,8 +307,7 @@ class LockingAPI extends AbstractExternalModule
                         $this->handleLockRecordLevel($lock);
                         $this->readLockStatusRecordLevel();
                         return $this->formatReturnRecordLevel();
-                }
-                else {
+                } else {
                         $this->readLockStatusDataLevel();
                         $this->handleLockDataLevel($lock);
                         return $this->formatReturnDataLevel();
@@ -317,20 +316,20 @@ class LockingAPI extends AbstractExternalModule
         }
 
         protected function handleLockRecordLevel(bool $lock) {
-                global $Proj;
+                global $Proj,$lang;
                 foreach($this->record as $record) {
-                        $log = "Record: ".$this->record;
+                        $log = "Record: ".$record;
                         if ($Proj->multiple_arms) { 
                                 $log .= " - {$lang['global_08']} $this->arm: ".$Proj->events[$this->arm]['name']; 
                         }
-			$locking = new Locking;
+                        $locking = new Locking;
                         $isWholeRecordLocked = $locking->isWholeRecordLocked($this->project_id, $record, $this->arm);
                         if($lock == true && !$isWholeRecordLocked) {
                                 $locking->lockWholeRecord($this->project_id, $record, $this->arm);
-                                REDCap::logEvent("Lock entire record.");
-                        else if ($lock == false && $isWholeRecordLocked) {
+                                Logging::logEvent("","redcap_locking_record","LOCK_RECORD",$record,$log,"Lock entire record");
+                        } else if ($lock == false && $isWholeRecordLocked) {
                                 $locking->unlockWholeRecord($this->project_id, $record, $this->arm);
-                                REDCap::logEvent("Unlock entire record");
+                                Logging::logEvent("","redcap_locking_record","LOCK_RECORD",$record,$log,"Unlock entire record");
                         }
                 }
         }
@@ -345,7 +344,7 @@ class LockingAPI extends AbstractExternalModule
                                         // form has been saved (and is locked or not)
                                         foreach ($form_data['data'] as $instance => $instanceData) {
                                                 $locked = (isset($instanceData['username']));
-                                                if (($lock && !$locked) || (!$lock && $locked)) { // lock unlocked forms or un lock locked forms 
+                                                if (($lock && !$locked) || (!$lock && $locked)) { // lock unlocked forms or unlock locked forms 
                                                         $toChange[] = array(
                                                                 'record'=>$this->record,
                                                                 'event_id'=>$eventId,
@@ -354,6 +353,14 @@ class LockingAPI extends AbstractExternalModule
                                                         );
                                                 }
                                         }
+                                } else if ($lock) {
+                                        // locking a form that has not yet been saved
+                                        $toChange[] = array(
+                                            'record'=>$this->record,
+                                            'event_id'=>$eventId,
+                                            'instrument'=>$form_name,
+                                            'instance'=>1
+                                        );
                                 }
                         }
                 }
@@ -402,6 +409,7 @@ class LockingAPI extends AbstractExternalModule
                         $this->lock_record_status[] = array( 
                             "record" => $row["record"], 
                             "arm_num" => $row['arm_num'], 
+                            "locked" => "1",
                             "username" => $row["username"],
                             "timestamp" => $row["timestamp"]
                         );
@@ -415,6 +423,7 @@ class LockingAPI extends AbstractExternalModule
                                 "record" => $unlocked_record, 
                                 # Get arm num from arm
                                 "arm_num" => $this->arm, 
+                                "locked" => "0",
                                 "username" =>  null,
                                 "timestamp" => null
                         );
@@ -503,10 +512,10 @@ class LockingAPI extends AbstractExternalModule
                 else if($this->returnFormat == 'csv') {
 
                         # Generate csv header from first object element, using object{0} to access
-                        $response = implode(",", array_keys($this->lock_record_status[0]))."\n";
+                        $response = implode(static::CSV_DELIMITER, array_keys($this->lock_record_status[0]))."\n";
                         # Add rows as comma-separated list
                         foreach((array) $this->lock_record_status as $row) {
-                                $response .= implode (", ", $row)."\n";
+                                $response .= implode (static::CSV_DELIMITER, $row)."\n";
                         }
                         
                 }
@@ -558,11 +567,10 @@ class LockingAPI extends AbstractExternalModule
                 $return = false;
                 $ts = (new DateTime())->format('Y-m-d H:i:s');
                 $sql = "insert into redcap_locking_data (project_id, record, event_id, form_name, username, timestamp, instance) ".
-                       "values ($this->project_id, '" . db_escape($record) . "', " . db_escape($eventId) . ", ".
-                       "'" . db_escape($instrument) . "', '" . db_escape($this->user) . "', '".db_escape($ts)."', " . db_escape($instance) . ")";
+                       "values (?, ?, ?, ?, ?, ?, ?)";
                 $description = "Lock record (".$this->PREFIX.")";
                 
-                if (db_query($sql)) {
+                if ($this->query($sql, [$this->project_id, $record, $eventId, $instrument, $this->user, $ts, $instance])) {
                         $log = "Record: $record";
                         if ($this->Proj->longitudinal) { 
                                 $log .= "\nEvent: ". REDCap::getEventNames(false, true, $eventId);
@@ -573,7 +581,7 @@ class LockingAPI extends AbstractExternalModule
                 }
                 return $return;
         }
-        
+
         /** 
          * writeUnlock()
          * Unfortunately the core unlocking code is not callable so this is 
@@ -586,20 +594,20 @@ class LockingAPI extends AbstractExternalModule
          */
         protected function writeUnlock($record, $eventId, $instrument, $instance) {
                 $return = false;
-		$sql = "delete from redcap_locking_data where project_id = " . db_escape($this->project_id). " and record = '" . db_escape($record) . "' ".
-                       "and event_id = " . db_escape($eventId) . " and form_name = '" . db_escape($instrument) . "' and instance = ".db_escape($instance)." limit 1";
+                $sql = "delete from redcap_locking_data where project_id = " . db_escape($this->project_id). " and record = '" . db_escape($record) . "' ".
+                            "and event_id = " . db_escape($eventId) . " and form_name = '" . db_escape($instrument) . "' and instance = ".db_escape($instance)." limit 1";
                 $description = "Unlock record (".$this->PREFIX.")";
 
-		// Regardless of whether the e-signture is shown or not, check first if an e-signature exists in case we need to negate it
-		$sqle2 = "select 1 from redcap_esignatures where project_id = ".db_escape($this->project_id)." and record = '" . db_escape($record) . "' ".
-                         "and event_id = " . db_escape($eventId) . " and form_name = '" . db_escape($instrument) . "' and instance = ".db_escape($instance);
-		if (db_num_rows(db_query($sqle2)) > 0)
-		{
-			// Negate the e-signature. NOTE: Anyone with locking privileges can negate an e-signature.
-			$sqle = "delete from redcap_esignatures where project_id = ".db_escape($this->project_id)." and record = '" . db_escape($record) . "' ".
-                         "and event_id = " . db_escape($eventId) . " and form_name = '" . db_escape($instrument) . "' and instance = ".db_escape($instance)." limit 1";
-			$descriptione = "Negate e-signature (".$this->PREFIX.")";
-		}
+                // Regardless of whether the e-signture is shown or not, check first if an e-signature exists in case we need to negate it
+                $sqle2 = "select 1 from redcap_esignatures where project_id = ".db_escape($this->project_id)." and record = '" . db_escape($record) . "' ".
+                                "and event_id = " . db_escape($eventId) . " and form_name = '" . db_escape($instrument) . "' and instance = ".db_escape($instance);
+                if (db_num_rows(db_query($sqle2)) > 0)
+                {
+                    // Negate the e-signature. NOTE: Anyone with locking privileges can negate an e-signature.
+                    $sqle = "delete from redcap_esignatures where project_id = ".db_escape($this->project_id)." and record = '" . db_escape($record) . "' ".
+                                "and event_id = " . db_escape($eventId) . " and form_name = '" . db_escape($instrument) . "' and instance = ".db_escape($instance)." limit 1";
+                    $descriptione = "Negate e-signature (".$this->PREFIX.")";
+                }
                 
                 if (db_query($sql)) {
                         $log = "Record: $record";
@@ -621,7 +629,7 @@ class LockingAPI extends AbstractExternalModule
 
         
         protected function formatReturnDataLevelCsv() {
-                $delim = ',';
+                $delim = static::CSV_DELIMITER;
                 $includeEvent = $this->Proj->longitudinal;
                 $response = "record,".(($includeEvent)?'redcap_event_name,':'')."instrument,instance,lock_status,username,timestamp";
                 
@@ -671,7 +679,7 @@ class LockingAPI extends AbstractExternalModule
                                 if (count($form_data['data']) > 0) {
                                         // form has been saved (and is locked or not)
                                         foreach ($form_data['data'] as $instance => $instanceData) {
-                                                $locked = (isset($instanceData['username'])) ? '1' : '0';
+                                                $locked = (empty($instanceData['username'])) ? '0' : '1';
                                                 $un = (isset($instanceData['username'])) ? $instanceData['username'] : '';
                                                 $ts = (isset($instanceData['timestamp'])) ? $instanceData['timestamp'] : '';
                                                 $thisForm = array(); 
