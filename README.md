@@ -128,7 +128,7 @@ All API calls (*i.e.*, status, lock, unlock) return a set of the event/instrumen
 * **0**: Not locked (but form data exists)
 * **&lt;empty&gt;**: No data exists for form
 
-Note that this enables you to determine whether data has ever been entered for an instrument, which is not possible using the regular 'Export Records' or 'Export Reports' API methods. ;-) (Also note it is not possible to lock forms that have not yet had any data entry.)
+Note that this enables you to determine whether data has ever been entered for an instrument, which is not possible using the regular 'Export Records' or 'Export Reports' API methods. ;-) 
 
 #### Lock Record Level
 All API calls (*i.e.*, status, lock, unlock) return the record level status for the records/arm requested in a specified format.
@@ -144,9 +144,6 @@ record,redcap_event_name,instrument,instance,lock_status,username,timestamp
 1001,visit_2_arm_1,visit_admin,1,0,,
 1001,visit_3_arm_1,visit_admin,1,,,
 ```
-
-## Minimum REDCap Version
-Minimum REDCap version is 10.4.1 due to the necessary usage of `createQuery()` for preparing a query with "IN"-Statement.
 
 ## Contributor(s)
 Ekin Tertemiz, Swiss Tropical and Public Health Institute

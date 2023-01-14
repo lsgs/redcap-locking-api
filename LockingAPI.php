@@ -35,6 +35,7 @@ class LockingAPI extends AbstractExternalModule
         private $lang;
         private $page;
         private $project_id;
+        private $Proj;
         private $super_user;
         private $user;
         private $user_rights;

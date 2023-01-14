@@ -1,48 +1,24 @@
 {
-	"name": "Locking API",
-
-	"namespace": "MCRI\\LockingAPI",
-
-	"framework-version": 8,
-
-	"authors": [
-		{
-			"name": "Luke Stevens",
-			"email": "luke.stevens@mcri.edu.au",
-			"institution": "Murdoch Children's Research Institute"
-		},
-		{
-			"name": "Ekin Tertemiz",
-			"email": "ekin.tertemiz@swisstph.ch",
-			"institution": "Swiss Tropical and Public Health Institute"
-		}		
-	],
-
-	"description": "Lock, unlock and read the lock status of instruments or entire records using API calls.",
-        
-        "permissions": [
-                "read redcap_locking_data",
-                "write redcap_locking_data"
-	],
-
+    "name": "Locking API",
+    "namespace": "MCRI\\LockingAPI",
+    "framework-version": 9,
+    "authors": [
+        {
+            "name": "Luke Stevens",
+            "email": "luke.stevens@mcri.edu.au",
+            "institution": "Murdoch Children's Research Institute"
+        },
+        {
+            "name": "Ekin Tertemiz",
+            "email": "ekin.tertemiz@swisstph.ch",
+            "institution": "Swiss Tropical and Public Health Institute"
+        }		
+    ],
+    "description": "Lock, unlock and read the lock status of instruments or entire records using API calls.",
+    "permissions": [ "read redcap_locking_data","write redcap_locking_data" ],
 	"enable-every-page-hooks-on-system-pages": false,
-
-	"no-auth-pages": [
-                "status",
-                "lock",
-                "unlock"
-        ],
-        
-        "links": {
-	},
-
-	"system-settings": [
-	],
-
-	"project-settings": [
-        ],
-        
-        "compatibility": {
-                "redcap-version-min": "10.4.1"
-        }
+    "no-csrf-pages": [ "status","lock","unlock" ],
+    "no-auth-pages": [ "status","lock","unlock" ],
+    "system-settings": [],
+    "project-settings": []
 }
