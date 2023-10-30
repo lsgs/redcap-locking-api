@@ -53,23 +53,18 @@ class LockingAPI extends AbstractExternalModule
         private $arm;
         private $format;
 
-        public function __construct() {
-                parent::__construct();
-                global $lang, $user_rights;
-                $this->page = PAGE;
-                $this->lang = &$lang;
-                $this->user_rights = &$user_rights;
-                $this->get = &$_GET;
-                $this->post = &$_POST;
-        }
-
         protected function isModuleEnabledForProject() {
                 return ExternalModules::getProjectSetting($this->PREFIX, $this->project_id, ExternalModules::KEY_ENABLED);
         }
         
         protected function processLockingApiRequest() {
-                global $Proj, $longitudinal;
-                
+                global $Proj, $longitudinal, $lang, $user_rights;
+                $this->page = PAGE;
+                $this->lang = &$lang;
+                $this->user_rights = &$user_rights;
+                $this->get = &$_GET;
+                $this->post = &$_POST;
+
                 $this->request = RestUtility::processRequest(true);
 
                 $this->user = $this->request->getRequestVars()['username'];
@@ -163,12 +158,14 @@ class LockingAPI extends AbstractExternalModule
                 # Accept multiple records if record level lock request only
                 if ($this->lock_record_level) {
                         $records = array();
+                        if ($this->format == 'json') {
+                            $this->post['record'] = json_decode($this->post['record']);
+                        }
+
                         if(is_array($this->post['record'])) {
-                                # Support array parameter via php/curl
                                 $records = $this->post['record'];
-                        } else if ($this->format == 'json') {
-                                # Transform json into array
-                                $records = json_decode($this->post['record']);
+                        } else {
+                                $records[] = $this->post['record'];
                         }
                         
                         # Taken and edited from API > record > delete.php:delRecords()
@@ -464,7 +461,8 @@ class LockingAPI extends AbstractExternalModule
                 }
                 
                 // read recorded form status values
-                $sql = "select record, event_id, field_name, value, instance from redcap_data where project_id=".db_escape($this->project_id)." and record='".db_escape($this->record)."' ";
+                $redcap_data = method_exists('\REDCap', 'getDataTable') ? \REDCap::getDataTable($this->project_id) : "redcap_data"; 
+                $sql = "select record, event_id, field_name, value, instance from $redcap_data where project_id=".db_escape($this->project_id)." and record='".db_escape($this->record)."' ";
                 $sql .= "and event_id in (".implode(',',array_keys($eventForms)).") ";
                 $sql .= "and field_name in ('".implode("','",$includedFormStatusFields)."') ";
 
